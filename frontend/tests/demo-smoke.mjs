@@ -239,6 +239,11 @@ try {
       "Mobile document overflows: " + view,
     );
   }
+  await navigate("Targets");
+  await page.getByLabel("Show archived", { exact: true }).uncheck();
+  await page
+    .getByRole("button", { name: "Acceptance lab", exact: true })
+    .waitFor();
   assert.deepEqual(errors, [], "Unexpected JavaScript errors");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
   await page
@@ -248,8 +253,41 @@ try {
     (await page.request.get(new URL("/api/auth/me", page.url()).href)).status(),
     401,
   );
+  let releaseOther;
+  let observedOther;
+  const otherRelease = new Promise((resolve) => (releaseOther = resolve));
+  const otherObserved = new Promise((resolve) => (observedOther = resolve));
+  await page.route("**/api/targets?archived=false", async (route) => {
+    const response = await route.fetch();
+    assert.deepEqual(
+      await response.json(),
+      [],
+      "Other account should own no targets",
+    );
+    observedOther();
+    await otherRelease;
+    await route.fulfill({ response });
+  });
+  await page.getByLabel("Username").fill(credentials.other_username);
+  await page.getByLabel("Password").fill(credentials.other_password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await otherObserved;
+  await page
+    .locator(".user")
+    .getByText(credentials.other_username, { exact: true })
+    .waitFor();
+  assert.equal(
+    await page
+      .getByRole("button", { name: "Acceptance lab", exact: true })
+      .count(),
+    0,
+    "New account rendered the previous owner's cached target while its refresh was pending",
+  );
+  otherRelease();
+  await page.unroute("**/api/targets?archived=false");
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
   console.log(
-    "PASS browser: login, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, severity filter, stale-response race, create/scan/error/edit/disable/archive/history, mobile, logout",
+    "PASS browser: login, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, severity filter, stale-response race, create/scan/error/edit/disable/archive/history, mobile, logout, account isolation during delayed refresh",
   );
 } finally {
   await browser.close();

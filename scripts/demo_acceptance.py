@@ -277,7 +277,30 @@ def main():
         flush=True,
     )
     if args.credentials_file:
-        args.credentials_file.write_text(json.dumps({"username": username, "password": password}))
+        other_username, other_password = "acceptance-other", secrets.token_urlsafe(24)
+        compose(
+            "exec",
+            "-T",
+            "backend",
+            "python",
+            "-c",
+            "import json,sys; from app.core.auth import password_hasher; "
+            "from app.db.models import User; from app.db.session import SessionLocal; "
+            "data=json.load(sys.stdin); db=SessionLocal(); "
+            "db.add(User(username=data['username'],password_hash=password_hasher.hash(data['password']))); "
+            "db.commit(); db.close()",
+            stdin=json.dumps({"username": other_username, "password": other_password}),
+        )
+        args.credentials_file.write_text(
+            json.dumps(
+                {
+                    "username": username,
+                    "password": password,
+                    "other_username": other_username,
+                    "other_password": other_password,
+                }
+            )
+        )
         args.credentials_file.chmod(0o600)
     print(
         "PASS Docker demo acceptance: original scenarios plus dedupe, SIGTERM/PENDING, database restart, API outage",
