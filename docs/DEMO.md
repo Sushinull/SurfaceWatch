@@ -63,8 +63,21 @@ Revert to `CERT_DAYS=90` for a normal certificate.
 
 ## Safe failure demonstration
 
-Stop the worker, queue a manual scan, then recover it normally or use the automated
-controlled failure test. Stopping the lab may yield explicit closed ports rather
+After a successful baseline, queue a scan and wait until history says RUNNING.
+Immediately interrupt the worker process:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml kill -s SIGKILL worker
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d worker
+```
+
+Expect the interrupted scan to become FAILED with SCAN_FAILED, the old trusted
+baseline to remain, and no REMOVED_PORT from that failure. If the scan completed
+before the kill, repeat on another RUNNING scan. `stop worker` sends SIGTERM and
+allows the current scan to finish within Docker's 30-second grace period; it is
+not a deterministic abrupt interruption test. Docker may kill a scan that exceeds
+that grace period.
+Stopping the lab may yield explicit closed ports rather
 than a process failure; **do not use an ordinary closed-service observation as a
 simulated scan failure**. The regression suite explicitly injects pipeline failure
 and proves that it leaves the trusted baseline unchanged with no fake removals:
@@ -80,11 +93,30 @@ add, repeated closure and controlled failure sequence using Nmap.
 
 ## Entirely local notifications
 
-The demo Compose override routes worker SMTP to Mailpit without credentials, and
+The demo Compose override gives backend and worker identical SMTP settings, routes
+worker SMTP to Mailpit without credentials, and
 explicitly permits plaintext on the internal demo network. In **Notifications**,
 create an SMTP rule with recipient `demo@example.test` and minimum severity LOW.
 Click **Send test**. Expect SENT in history; open http://localhost:8025 to inspect
 the received message. Future meaningful events will also arrive there.
+SMTP should display **CONFIGURED**; Telegram/Discord remain NOT CONFIGURED unless
+you deliberately supplied their settings. Only availability booleans reach the UI.
+
+Mailpit joins both `lab` and `default` networks. The ordinary bridge enables the
+published inspection port where an internal-only network did not expose it. The
+web UI binds only to `127.0.0.1:8025`; SMTP 1025 is not host-published. The HTTP/TLS
+lab remains solely on internal `lab`, without any host ports. Recreate old
+Mailpit/API/worker containers after pulling:
+
+```bash
+docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --force-recreate mailpit backend worker
+docker compose -f docker-compose.yml -f docker-compose.demo.yml port mailpit 8025
+```
+
+On Windows PowerShell, open `http://localhost:8025` or run
+`Invoke-WebRequest http://localhost:8025`. This addresses the reported Docker Engine
+29.8.1 / Compose 5.5.1 internal-only publishing issue; CI separately checks actual
+port binding, host HTTP access and receipt on its Linux Docker runner.
 
 ## Scheduled observation and cleanup
 

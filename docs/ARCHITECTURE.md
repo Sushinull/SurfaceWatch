@@ -109,3 +109,20 @@ operator-controlled environment settings. No arbitrary webhook URL is accepted v
 the API. Retry delivery is at least once: an interruption after external delivery
 but before its database commit can resend a notification. Local jobs are durable,
 but V1 does not run parallel workers or promise high-throughput monitoring.
+
+SIGTERM requests graceful shutdown after the current tick. SIGKILL can leave a
+committed RUNNING scan; startup recovery marks it FAILED, records SCAN_FAILED,
+clears closure candidates and preserves the trusted baseline. CI tests the real
+kill/restart path on the disposable Docker project.
+
+## Demo networking and channel status
+
+The HTTP/TLS lab joins only internal `lab` and has no published ports. Mailpit
+joins `lab` and `default`: SMTP is reached internally at `mailpit:1025`, while its
+inspection UI alone is published at `127.0.0.1:8025`. The normal bridge avoids the
+internal-only publishing behavior on the reported Docker Engine setup.
+
+One demo environment anchor gives backend and worker identical SMTP configuration.
+The authenticated status endpoint returns only booleans and reports configuration
+availability, not reachability. Telegram/Discord credentials remain environment-only.
+Changing `.env` requires recreating both API and worker.

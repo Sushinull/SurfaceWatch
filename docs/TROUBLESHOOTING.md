@@ -15,7 +15,10 @@
 | Second worker exits | Expected: one V1 worker owns an advisory lock. Use the existing worker instead of scaling replicas. |
 | Slow scans | Timeout is per IP; maximum eight IPs by default. Use narrower profiles, explicit IPs or fewer targets. Service detection may need time even on local ports. |
 | SCAN_FAILED after restart | Interrupted RUNNING jobs are recorded as failed. The prior baseline remains. Queue a new scan. |
-| Notification stays PENDING / FAILED | Inspect attempts and logs; configure SMTP credentials/STARTTLS or Telegram/Discord settings, recreate worker, use Send test. |
+| Notification stays PENDING / FAILED | Inspect attempts and logs; configure SMTP credentials/STARTTLS or Telegram/Discord settings, recreate backend and worker, use Send test. CONFIGURED means settings are present, not verified connectivity. |
+| Mailpit 8025 configured but unreachable / `docker port` empty | Pull the V1 fix and recreate Mailpit with both Compose files. It must join `lab` and `default`; internal-only attachment reproduced this symptom on the reported Engine 29.8.1 / Compose 5.5.1 setup. Verify `port mailpit 8025` and host HTTP access. Do not publish SMTP or lab ports. |
+| SMTP delivered but badge says NOT CONFIGURED | Backend and worker must load the same channel settings. The demo now shares one SMTP anchor. Recreate both with both Compose files; do not edit UI state or expose credentials. |
+| Stop/restart did not create SCAN_FAILED | SIGTERM may finish the current scan within Docker's 30-second grace period. For deterministic abrupt recovery, wait for RUNNING, use `kill -s SIGKILL worker`, then start worker. A queued PENDING job was not interrupted. |
 | SMTP needs plaintext | Keep production STARTTLS enabled. Only an explicitly trusted local SMTP lab should use SMTP_ALLOW_PLAINTEXT=true and SMTP_STARTTLS=false. |
 | Docker lab subnet conflict | Change Compose subnet, lab address, ALLOWED_TARGET_CIDRS and target together. |
 | Docker permission/network issue | Use TCP connect scanning. No raw-socket privileges are needed. Container IPv6 needs a reachable IPv6 network; native scanning may be easier. |
@@ -35,3 +38,8 @@ docker compose exec backend python -m app.cli reset-password --username admin
 For the demo, include `-f docker-compose.yml -f docker-compose.demo.yml` consistently
 when starting/recreating the full stack. Do not paste `.env`, passwords, Telegram
 tokens or Discord webhook URLs into bug reports.
+
+PowerShell environment syntax is `$env:EXTRA_SERVICE='true'` or `$env:CERT_DAYS='6'`
+before Compose; use `Remove-Item Env:EXTRA_SERVICE` / `Remove-Item Env:CERT_DAYS`
+afterward. `down` preserves history, while `down -v` deletes it. Changing
+POSTGRES_PASSWORD in `.env` does not update an existing database role.

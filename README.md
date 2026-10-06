@@ -14,7 +14,9 @@ scanning, subnet discovery or automatic vulnerability assessment.
 ## Quick start
 
 Requirements: Git, Python 3.12+ for configuration generation, Docker Engine with
-Docker Compose v2, and approximately 2 GB of available RAM for a small lab.
+the Docker Compose plugin (`docker compose`, v2 or newer), and approximately 2 GB
+of available RAM for a small lab. On Windows, use Linux containers in Docker Desktop
+or a Docker Engine accessible from your shell; PowerShell examples are in DEMO.md.
 The application needs no purchased domain, paid API, cloud hosting or subscription.
 Your computer, electricity and optional notification providers are outside the
 application's costs. All required services run locally.
@@ -129,7 +131,7 @@ any scan or event. Editing/archiving waits until an active scan completes.
 
 ## Free notifications
 
-Configure credentials in `.env`, recreate the worker, then add a rule in
+Configure credentials in `.env`, recreate **backend and worker**, then add a rule in
 **Notifications**. Select the channel and minimum severity; send a test and inspect
 its PENDING/SENT/FAILED history. Notifications are grouped by target scan and are
 sent only for newly emitted events at or above the rule threshold.
@@ -144,6 +146,14 @@ sent only for newly emitted events at or above the rule threshold.
 Credentials are not sent to the frontend. SMTP can run entirely locally using the
 included Mailpit demo; see [demo instructions](docs/DEMO.md). Delivery errors do
 not change scan results. Failed deliveries retry up to three times with a delay.
+CONFIGURED means channel settings are present; it is not a connectivity check.
+Send test and SENT/received evidence confirm delivery. The demo shares SMTP settings
+between API and worker and overrides real SMTP credentials with empty values.
+
+```bash
+docker compose up -d --force-recreate backend worker
+# Include both -f files instead when running the demo.
+```
 
 ## Native development
 
@@ -213,15 +223,28 @@ RUN_LIVE_LAB=1 python -m pytest -q
 cd ../frontend
 npm ci
 npm run build
-npx prettier --check 'src/**/*.{ts,tsx,css}' '*.json' '*.ts' index.html
+npx prettier --check 'src/**/*.{ts,tsx,css}' 'tests/**/*.mjs' '*.json' '*.ts' index.html
+npm audit
 ```
 
 The standard fixture suite uses SQLite for fast test isolation only. Production
 requires PostgreSQL. GitHub Actions additionally checks native PostgreSQL migrations,
 the same flows against isolated PostgreSQL schemas, live Nmap/TLS/SMTP, the frontend,
-and Docker startup. See [verification report](docs/PROJECT_REPORT.md) for tests
+and real Docker/Mailpit delivery, abrupt worker recovery, scheduling and browser
+smoke. The Docker acceptance script requires a fresh disposable project; never run
+it against your installation. See [verification report](docs/PROJECT_REPORT.md) for tests
 actually executed and any environment limits; a workflow's presence is not proof
 that its run has passed.
+
+## V1 freeze
+
+`v1.0.0` is an annotated tag for the verified main commit. The release workflow
+runs only after a push with the exact message `release: freeze SurfaceWatch v1.0.0`
+passes all mandatory checks. It verifies the tested SHA is still main's HEAD
+and refuses to overwrite an existing tag. The GitHub Release records the exact
+source SHA and CI run. For a stable checkout after release, use `git checkout v1.0.0`.
+This freeze covers authorized local portfolio/small-lab use. See
+[release notes](docs/RELEASE_NOTES.md) for scope and limitations.
 
 ## Demo, security, troubleshooting and roadmap
 

@@ -30,6 +30,14 @@ vulnerability probing workflow or large-scale discovery.
 - Non-root backend/frontend/demo containers; no privileged scanning, no capabilities
   for application containers, no-new-privileges, read-only filesystem and tmpfs.
 - Loopback-only published UI/database/mail inspection ports; internal demo network.
+- Hard endpoint denials also inspect IPv4-mapped IPv6, preventing mapped metadata,
+  multicast or unspecified IPv4 endpoints from bypassing those rules.
+
+Mailpit joins the normal bridge for loopback publishing; lab HTTP/TLS services stay
+internal and SMTP 1025 is not published. Backend/worker share demo settings with
+empty SMTP credentials. Use plaintext SMTP only for this trusted local lab. Keep
+the unauthenticated Mailpit UI local. Channel status returns only booleans, never
+passwords, tokens or webhook URLs.
 
 ## Operator responsibilities and limitations
 
@@ -62,7 +70,9 @@ targets; scanning deadlines are per address. Monitor logs and do not oversubscri
 
 ## Dependency verification
 
-Pinned backend requirements and a frontend lockfile make builds repeatable.
+Pinned direct backend requirements and a frontend lockfile improve repeatability.
+Backend transitive dependencies and base-image tags are resolved at build time;
+V1 freezes the source, not every future dependency/image resolution.
 Dependency audits were run during development; consult the final report for results.
 They are a point-in-time check, not proof of absence of vulnerabilities. Update
 dependencies and base images deliberately, then rerun migrations and tests.
