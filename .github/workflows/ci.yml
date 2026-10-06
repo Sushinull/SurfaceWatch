@@ -33,6 +33,7 @@ jobs:
         working-directory: backend
       - run: python -m pytest -q
         working-directory: backend
+      - run: pip install pip-audit==2.10.0 && python -m pip_audit -r backend/requirements.txt --progress-spinner off
   frontend:
     runs-on: ubuntu-latest
     defaults:
@@ -43,15 +44,25 @@ jobs:
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - run: npm ci
       - run: npm run build
-      - run: npx prettier --check 'src/**/*.{ts,tsx,css}' '*.json' '*.ts' index.html
+      - run: npx prettier --check 'src/**/*.{ts,tsx,css}' 'tests/**/*.mjs' '*.json' '*.ts' index.html
+      - run: npm audit
   docker:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      COMPOSE_PROJECT_NAME: surfacewatch-regression
+      SW_ACCEPTANCE_CREDENTIALS: ${{ runner.temp }}/surfacewatch-acceptance.json
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - run: python scripts/setup.py
       - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml config --quiet
       - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build -d --wait
       - run: curl --fail http://localhost:8080/api/health
+      - run: python scripts/demo_acceptance.py --disposable --credentials-file "$SW_ACCEPTANCE_CREDENTIALS"
+      - run: npm ci && npx playwright install --with-deps chromium && node tests/demo-smoke.mjs
+        working-directory: frontend
       - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml logs --no-color
         if: failure()
       - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml down -v

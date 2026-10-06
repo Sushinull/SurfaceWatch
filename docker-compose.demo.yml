@@ -1,3 +1,11 @@
+x-demo-smtp: &demo-smtp
+  SMTP_HOST: mailpit
+  SMTP_PORT: 1025
+  SMTP_FROM: surfacewatch@localhost
+  SMTP_USER: ""
+  SMTP_PASSWORD: ""
+  SMTP_STARTTLS: "false"
+  SMTP_ALLOW_PLAINTEXT: "true"
 services:
   lab:
     build: ./demo
@@ -13,10 +21,10 @@ services:
   mailpit:
     image: axllent/mailpit:v1.27
     ports: [127.0.0.1:8025:8025]
-    networks: [lab]
+    # A normal bridge supplies published-port reachability on Docker Engine 29.
+    # SMTP still travels over lab; only the inspection UI is published to loopback.
+    networks: [lab, default]
+  backend:
+    environment: *demo-smtp
   worker:
-    environment:
-      SMTP_HOST: mailpit
-      SMTP_PORT: 1025
-      SMTP_STARTTLS: "false"
-      SMTP_ALLOW_PLAINTEXT: "true"
+    environment: *demo-smtp

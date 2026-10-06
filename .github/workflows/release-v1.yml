@@ -1,0 +1,63 @@
+name: SurfaceWatch V1 freeze
+on:
+  workflow_run:
+    workflows: [SurfaceWatch checks]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: surfacewatch-v1-freeze
+  cancel-in-progress: false
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_commit.message == 'release: freeze SurfaceWatch v1.0.0'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CHECK_RUN_ID: ${{ github.event.workflow_run.id }}
+      CHECK_RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Verify exact main SHA and all mandatory jobs
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CHECK_RUN_ID/jobs" > /tmp/check-jobs.json
+          python - <<'PY'
+          import json
+          jobs = {j['name']: j['conclusion'] for j in json.load(open('/tmp/check-jobs.json'))['jobs']}
+          assert {name: jobs.get(name) for name in ('backend', 'frontend', 'docker')} == {
+              'backend': 'success', 'frontend': 'success', 'docker': 'success'
+          }, jobs
+          PY
+          test -z "$(git ls-remote --tags origin refs/tags/v1.0.0)"
+      - name: Create annotated tag on verified source
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.0 "$SOURCE_SHA" -m "SurfaceWatch v1.0.0; verified checks: $CHECK_RUN_URL"
+          git push origin refs/tags/v1.0.0
+      - name: Publish SurfaceWatch v1.0.0
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          body = Path('docs/RELEASE_NOTES.md').read_text()
+          body += '\nVerified source: `' + os.environ['SOURCE_SHA'] + '`\n'
+          body += '\nAll mandatory checks: ' + os.environ['CHECK_RUN_URL'] + '\n'
+          Path('/tmp/release-notes.md').write_text(body)
+          PY
+          gh release create v1.0.0 --verify-tag --title 'SurfaceWatch v1.0.0' --notes-file /tmp/release-notes.md

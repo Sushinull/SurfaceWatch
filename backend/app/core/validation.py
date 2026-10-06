@@ -37,8 +37,9 @@ def validate_ports(ports: list[int]) -> list[int]:
 
 def address_allowed(address: str, cidrs: str) -> bool:
     ip = ipaddress.ip_address(address)
+    endpoint = ip.ipv4_mapped or ip if isinstance(ip, ipaddress.IPv6Address) else ip
     # Never probe unspecified, multicast or the common metadata endpoint.
-    if ip.is_unspecified or ip.is_multicast or address == "169.254.169.254":
+    if endpoint.is_unspecified or endpoint.is_multicast or str(endpoint) == "169.254.169.254":
         return False
     networks = [ipaddress.ip_network(n.strip()) for n in cidrs.split(",") if n.strip()]
     if any(ip.version == n.version and ip in n for n in networks):

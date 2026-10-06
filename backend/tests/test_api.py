@@ -135,3 +135,27 @@ def test_expired_session(logged_in, session_factory):
             s.expires_at = datetime.now(UTC) - timedelta(seconds=1)
         db.commit()
     assert logged_in.get("/api/auth/me").status_code == 401
+
+
+def test_events_filter_pagination_acknowledgment_and_ownership(logged_in, session_factory):
+    from app.core.config import get_settings
+
+    c = logged_in
+    target = add_target(c).json()
+    c.post(f"/api/targets/{target['id']}/scans")
+    tick(
+        session_factory,
+        get_settings(),
+        lambda *args: Snapshot(state="FAILED", errors=["controlled"]),
+    )
+    event = c.get(
+        f"/api/events?target_id={target['id']}&severity=MEDIUM&event_type=SCAN_FAILED"
+    ).json()[0]
+    assert c.get("/api/events?severity=HIGH").json() == []
+    assert c.get("/api/events?limit=1&offset=1").json() == []
+    assert c.get("/api/events?since=2099-01-01T00:00:00Z").json() == []
+    assert c.post(f"/api/events/{event['id']}/acknowledge").json()["acknowledged"] is True
+    c.post("/api/auth/logout")
+    c.post("/api/auth/login", json={"username": "other", "password": "another-test-password"})
+    assert c.post(f"/api/events/{event['id']}/acknowledge").status_code == 404
+    assert c.get("/api/events").json() == []

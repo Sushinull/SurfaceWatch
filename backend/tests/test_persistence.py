@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 from unittest.mock import patch
 
+import pytest
 from sqlalchemy import select
 
 from app.core.config import get_settings
@@ -74,12 +75,13 @@ def test_partial_does_not_promote_and_repeated_failure_no_spam(session_factory):
         assert not db.scalars(select(ChangeEvent).where(ChangeEvent.type == "REMOVED_PORT")).all()
 
 
-def test_interruption_resets_candidate(session_factory):
+@pytest.mark.parametrize("interruption", ["FAILED", "PARTIAL"])
+def test_interruption_resets_candidate(session_factory, interruption):
     with session_factory() as db:
         t = make_target(db)
         run(db, t)
         run(db, t, open_port=False)
-        run(db, t, "FAILED")
+        run(db, t, interruption)
         assert not run(db, t, open_port=False)[1]
         assert [e.type for e in run(db, t, open_port=False)[1]] == ["REMOVED_PORT"]
 
@@ -125,10 +127,37 @@ def test_notification_retry_does_not_invalidate_scan(session_factory):
 
 
 def test_snapshot_immutable(session_factory):
-    import pytest
-
     with session_factory() as db:
         t = make_target(db)
         job, _ = run(db, t)
         with pytest.raises(ValueError):
             finish_scan(db, job.id, Snapshot(state="FAILED"), get_settings())
+
+
+def test_outbox_three_failures_then_terminal_and_disabled_rule_cancels(session_factory):
+    with session_factory() as db:
+        rule = AlertRule(owner_id=1, channel="smtp", destination="demo@example.test")
+        db.add(rule)
+        db.flush()
+        note = Notification(rule_id=rule.id, payload="delivery test")
+        db.add(note)
+        db.commit()
+        with patch(
+            "app.services.notifications.send_notification", side_effect=RuntimeError("secret")
+        ) as send:
+            for attempt in range(1, 4):
+                note.next_attempt_at = datetime.now(UTC) - timedelta(seconds=1)
+                db.commit()
+                dispatch_notifications(db, get_settings())
+                assert note.attempts == attempt
+                assert note.state == ("FAILED" if attempt == 3 else "PENDING")
+                assert note.error == "Delivery failed: RuntimeError"
+            dispatch_notifications(db, get_settings())
+            assert send.call_count == 3
+            rule.enabled = False
+            cancelled = Notification(rule_id=rule.id, payload="disabled rule")
+            db.add(cancelled)
+            db.commit()
+            dispatch_notifications(db, get_settings())
+            assert cancelled.state == "CANCELLED" and cancelled.attempts == 0
+            assert send.call_count == 3

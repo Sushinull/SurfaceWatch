@@ -79,6 +79,13 @@ def test_address_policy():
     assert not address_allowed("224.0.0.1", "0.0.0.0/0")
 
 
+@pytest.mark.parametrize(
+    "address", ["::ffff:169.254.169.254", "::ffff:0.0.0.0", "::ffff:224.0.0.1"]
+)
+def test_mapped_ipv4_never_bypasses_hard_denials(address):
+    assert not address_allowed(address, "::/0")
+
+
 def test_subprocess_argument_array_and_pinned_ip():
     with patch("app.scanner.nmap.subprocess.run") as run:
         run.return_value.returncode = 0
