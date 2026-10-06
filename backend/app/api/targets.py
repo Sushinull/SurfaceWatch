@@ -213,7 +213,11 @@ def update_target(
     for key, value in data.model_dump().items():
         setattr(target, key, value)
     target.next_scan_at = datetime.now(UTC) + timedelta(seconds=target.interval_seconds)
-    db.commit()
+    try:
+        db.commit()
+    except IntegrityError:
+        db.rollback()
+        raise HTTPException(409, "An active target with this host already exists") from None
     return target_view(db, target)
 
 

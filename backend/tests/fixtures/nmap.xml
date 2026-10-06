@@ -1,0 +1,2 @@
+<?xml version="1.0"?>
+<nmaprun><host><status state="up" reason="user-set"/><address addr="127.0.0.1" addrtype="ipv4"/><ports><extraports state="closed" count="1"/><port protocol="tcp" portid="22"><state state="open"/><service name="ssh" product="OpenSSH" version="9.2" conf="10"/></port></ports></host><runstats><finished exit="success"/></runstats></nmaprun>
