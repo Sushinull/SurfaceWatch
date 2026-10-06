@@ -1,6 +1,6 @@
 # SurfaceWatch v1.0.1
 
-Backward-compatible hardening of authorized local V1 monitoring. Twelve confirmed
+Backward-compatible hardening of authorized local V1 monitoring. Thirteen confirmed
 bugs fixed; no new providers, architecture, schema or UI redesign.
 
 - Reject late/stale scan completion; recover orphaned RUNNING work after transient
@@ -11,6 +11,8 @@ bugs fixed; no new providers, architecture, schema or UI redesign.
 - Reject blank profile names; serialize notification rule count/insert on PostgreSQL.
 - Reject obsolete UI refresh responses, honor configured TLS bands and restore
   mobile Sign out access.
+- Clear account caches on authentication boundaries; reject late previous-owner
+  snapshot/action results and stale whoami responses during account switching.
 - Add deterministic adversarial/provider tests, real PG races and fresh Docker/SMTP,
   scheduler, recovery, DB/API outage and browser regression gates.
 

@@ -21,6 +21,8 @@ vulnerability probing workflow or large-scale discovery.
 - CSRF defenses: every write requires X-SurfaceWatch, browser Origin must match
   APP_ORIGIN, and CORS is not enabled. Same-origin browser proxy.
 - User ownership checks on targets, scans, events and notification rules.
+- Authentication boundaries clear browser account caches and invalidate pending
+  previous-session refresh, whoami and snapshot/action callbacks.
 - SQLAlchemy parameter binding, Pydantic input limits and output models, React
   text escaping, no raw HTML insertion, Nginx body limit and CSP.
 - defusedxml parser, conservative state classification, confirmation before closure.

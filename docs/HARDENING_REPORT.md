@@ -36,11 +36,14 @@ finding was confirmed. Each fix has focused regression coverage.
 | H10 MEDIUM | critical=14/warning=60 yields incorrect UI bands for 10/45-day certificates. | UI hardcoded 7/30. API computes configured current band; UI consumes it. | Custom-threshold API cases and browser authoritative-band fixture. |
 | H11 LOW | Nine rules plus two simultaneous POSTs both return 201, creating 11 rules. | Count/insert not serialized. Lock owner through PostgreSQL count/commit. | Actual API race: 201+409, exactly 10; SQLite reproduced old race but does not implement deployment row locks. |
 | H12 LOW | At 390 px the Sign out button cannot be reached. | Mobile CSS hides its entire parent. Keep account controls visible while hiding decorative sidebar content. | Real mobile Playwright logout plus revoked-cookie 401. |
+| H13 MEDIUM | Sign out, sign into another account, delay its empty targets response: previous owner's target remains visible. A pending snapshot can also arrive after the boundary. | Account caches and asynchronous mutations survived authentication changes. Clear all account data before authenticated rendering/on logout/401; invalidate stale whoami, snapshot and action callbacks. | Real two-account browser flow proves API returns no targets while old UI exposes one; patched UI shows neither old target nor delayed private snapshot. Delayed whoami cannot replace the newly signed-in account. |
 
 Eight original backend findings produced nine failing regressions. H10 added two
 failing cases, H09 failed on the old UI, H11 was reproduced using real concurrent
 requests/count queries, and H12 failed as a real mobile button timeout. No mock
 count or fabricated security exploit is presented as a confirmed finding.
+H13 was reproduced after the first candidate verification, so main advanced before
+publishing; the release gate refused the superseded SHA without creating a tag.
 
 ## Non-issues / intentional V1 boundaries
 
@@ -98,6 +101,10 @@ details/snapshot, filter race, configured TLS band, creation, policy-denied scan
 error, edit/disable/archive/preserved history and mobile logout. All five views
 are checked for document overflow at 390 px. Custom TLS-band UI uses an API fixture;
 backend custom-band computation is independently tested.
+Two actual accounts also verify empty owner-scoped API data, no cached previous
+owner target, no delayed previous-owner snapshot, and latest whoami identity.
+A 401 fixture verifies frontend expiry cleanup; actual database session expiry is
+independently verified by the backend suite.
 
 Windows target **Engine 29.8.1 / Compose 5.5.1**: this host cannot independently
 rerun Windows. Prior operator acceptance is historical evidence. Networking/bindings
@@ -117,6 +124,8 @@ DB restart, API outage and browser passed. Actual Linux Engine **28.0.4**, Compo
 **2.38.2**, CI Chromium **151.0.7922.34**; local Chromium **143** and Nmap **7.94SVN**.
 
 This candidate proof is followed by a fresh run on the final release commit.
+The later session-boundary regression (H13) supersedes this 12-fix checkpoint;
+final CI must include all thirteen fixes and the expanded two-account browser flow.
 [The v1.0.1 Release](https://github.com/Sushinull/SurfaceWatch/releases/tag/v1.0.1)
 records that exact final SHA and CI URL after the gate succeeds. Do not substitute
 the candidate run for final-SHA verification.

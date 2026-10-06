@@ -359,11 +359,29 @@ try {
     "An obsolete whoami response replaced the freshly authenticated account",
   );
   await page.unroute("**/api/auth/me");
-  await page.getByRole("button", { name: "Sign out", exact: true }).click();
-  await page.getByLabel("Username").waitFor();
+  await page.route("**/api/notifications/config", (route) =>
+    route.fulfill({
+      status: 401,
+      json: { detail: "Please sign in" },
+    }),
+  );
+  await page.getByLabel("Username").waitFor({ timeout: 10000 });
+  await page.unroute("**/api/notifications/config");
+  // The UI receives an expired-session fixture; revoke the actual test cookie too.
+  const loggedOut = await page.request.post(
+    new URL("/api/auth/logout", page.url()).href,
+    {
+      headers: { "X-SurfaceWatch": "1", Origin: new URL(page.url()).origin },
+    },
+  );
+  assert.equal(loggedOut.status(), 204);
+  assert.equal(
+    (await page.request.get(new URL("/api/auth/me", page.url()).href)).status(),
+    401,
+  );
   assert.deepEqual(errors, [], "Unexpected JavaScript errors");
   console.log(
-    "PASS browser: login, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, severity filter, stale-response races (filters/whoami), create/scan/error/edit/disable/archive/history, mobile, logout, account isolation during delayed refresh",
+    "PASS browser: login/expired-session/logout, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, stale-response races (filters/whoami), create/scan/error/edit/disable/archive/history, mobile, account/snapshot isolation during delayed refresh",
   );
 } finally {
   await browser.close();
