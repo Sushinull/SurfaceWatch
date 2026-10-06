@@ -542,18 +542,52 @@ export default function App() {
   const [scanOffset, setScanOffset] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
   const refreshGeneration = useRef(0);
+  const authGeneration = useRef(0);
   const activeRefresh = useRef<(() => Promise<void>) | null>(null);
   const refreshInFlight = useRef<(() => Promise<void>) | null>(null);
+  const clearAccountData = useCallback(() => {
+    ++refreshGeneration.current;
+    activeRefresh.current = null;
+    refreshInFlight.current = null;
+    setDashboard(null);
+    setTargets([]);
+    setProfiles([]);
+    setEvents([]);
+    setScans([]);
+    setRules([]);
+    setNotes([]);
+    setConfigured({});
+    setDetailScans([]);
+    setDetailEvents([]);
+    setDetail(null);
+    setSelected(null);
+    setForm(undefined);
+    setInspected(null);
+    setFilters({ target: "", type: "", severity: "", since: "", until: "" });
+    setEventOffset(0);
+    setScanOffset(0);
+    setShowArchived(false);
+    setView("Overview");
+    setError("");
+    setBusy(false);
+  }, []);
   const checkUser = useCallback(async () => {
+    const generation = ++authGeneration.current;
     try {
-      setUser(await api("/auth/me"));
+      const signedIn = await api<{ id: number; username: string }>("/auth/me");
+      if (generation !== authGeneration.current) return;
+      // Clear before rendering authenticated content, not in a post-render effect.
+      clearAccountData();
+      setUser(signedIn);
     } catch (e) {
+      if (generation !== authGeneration.current) return;
+      clearAccountData();
       if (!(e instanceof ApiError && e.status === 401)) setError(message(e));
       setUser(null);
     } finally {
-      setChecking(false);
+      if (generation === authGeneration.current) setChecking(false);
     }
-  }, []);
+  }, [clearAccountData]);
   useEffect(() => {
     void checkUser();
   }, [checkUser]);
@@ -608,8 +642,11 @@ export default function App() {
       }
     } catch (e) {
       if (generation !== refreshGeneration.current) return;
-      if (e instanceof ApiError && e.status === 401) setUser(null);
-      else setError(message(e));
+      if (e instanceof ApiError && e.status === 401) {
+        ++authGeneration.current;
+        clearAccountData();
+        setUser(null);
+      } else setError(message(e));
     } finally {
       if (
         refreshInFlight.current === refresh &&
@@ -617,7 +654,15 @@ export default function App() {
       )
         refreshInFlight.current = null;
     }
-  }, [user, filters, eventOffset, scanOffset, showArchived, selected]);
+  }, [
+    user,
+    filters,
+    eventOffset,
+    scanOffset,
+    showArchived,
+    selected,
+    clearAccountData,
+  ]);
   useEffect(() => {
     activeRefresh.current = refresh;
     void refresh();
@@ -630,15 +675,17 @@ export default function App() {
     };
   }, [refresh]);
   async function action(fn: () => Promise<unknown>) {
+    const generation = authGeneration.current;
     setBusy(true);
     setError("");
     try {
       await fn();
+      if (generation !== authGeneration.current) return;
       await refresh();
     } catch (e) {
-      setError(message(e));
+      if (generation === authGeneration.current) setError(message(e));
     } finally {
-      setBusy(false);
+      if (generation === authGeneration.current) setBusy(false);
     }
   }
   const scan = (id: number) =>
@@ -646,7 +693,11 @@ export default function App() {
   const ack = (id: number) =>
     void action(() => api("/events/" + id + "/acknowledge", "POST"));
   const inspect = (id: number) =>
-    void action(async () => setInspected(await api<Scan>("/scans/" + id)));
+    void action(async () => {
+      const generation = authGeneration.current;
+      const snapshot = await api<Scan>("/scans/" + id);
+      if (generation === authGeneration.current) setInspected(snapshot);
+    });
   function nav(v: View) {
     setView(v);
     setSelected(null);
@@ -726,7 +777,11 @@ export default function App() {
             <button
               onClick={() =>
                 void action(async () => {
+                  const generation = authGeneration.current;
                   await api("/auth/logout", "POST");
+                  if (generation !== authGeneration.current) return;
+                  ++authGeneration.current;
+                  clearAccountData();
                   setUser(null);
                 })
               }

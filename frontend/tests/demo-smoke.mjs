@@ -239,6 +239,27 @@ try {
       "Mobile document overflows: " + view,
     );
   }
+  await navigate("Scan history");
+  let releaseSnapshot;
+  let observedSnapshot;
+  let finishedSnapshot;
+  const snapshotRelease = new Promise((resolve) => (releaseSnapshot = resolve));
+  const snapshotObserved = new Promise(
+    (resolve) => (observedSnapshot = resolve),
+  );
+  const snapshotFinished = new Promise(
+    (resolve) => (finishedSnapshot = resolve),
+  );
+  await page.route("**/api/scans/*", async (route) => {
+    const response = await route.fetch();
+    assert.equal(response.status(), 200);
+    observedSnapshot();
+    await snapshotRelease;
+    await route.fulfill({ response });
+    finishedSnapshot();
+  });
+  await page.getByRole("button", { name: "Inspect snapshot" }).first().click();
+  await snapshotObserved;
   await navigate("Targets");
   await page.getByLabel("Show archived", { exact: true }).uncheck();
   await page
@@ -255,8 +276,10 @@ try {
   );
   let releaseOther;
   let observedOther;
+  let finishedOther;
   const otherRelease = new Promise((resolve) => (releaseOther = resolve));
   const otherObserved = new Promise((resolve) => (observedOther = resolve));
+  const otherFinished = new Promise((resolve) => (finishedOther = resolve));
   await page.route("**/api/targets?archived=false", async (route) => {
     const response = await route.fetch();
     assert.deepEqual(
@@ -267,6 +290,7 @@ try {
     observedOther();
     await otherRelease;
     await route.fulfill({ response });
+    finishedOther();
   });
   await page.getByLabel("Username").fill(credentials.other_username);
   await page.getByLabel("Password").fill(credentials.other_password);
@@ -277,17 +301,69 @@ try {
     .getByText(credentials.other_username, { exact: true })
     .waitFor();
   assert.equal(
-    await page
-      .getByRole("button", { name: "Acceptance lab", exact: true })
-      .count(),
+    await page.getByText("Acceptance lab", { exact: true }).count(),
     0,
     "New account rendered the previous owner's cached target while its refresh was pending",
   );
-  otherRelease();
+  releaseSnapshot();
+  await snapshotFinished;
+  await page.waitForTimeout(250);
+  assert.equal(
+    await page.getByRole("dialog").count(),
+    0,
+    "Previous owner's pending snapshot opened after account switch",
+  );
+  await page.unroute("**/api/scans/*");
+  releaseOther();
+  await otherFinished;
   await page.unroute("**/api/targets?archived=false");
   await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByLabel("Username").waitFor();
+  let releaseAuth;
+  let observedAuth;
+  let finishedAuth;
+  let authHeld = false;
+  const authRelease = new Promise((resolve) => (releaseAuth = resolve));
+  const authObserved = new Promise((resolve) => (observedAuth = resolve));
+  const authFinished = new Promise((resolve) => (finishedAuth = resolve));
+  await page.route("**/api/auth/me", async (route) => {
+    if (authHeld) return route.continue();
+    authHeld = true;
+    const response = await route.fetch();
+    assert.equal((await response.json()).username, credentials.username);
+    observedAuth();
+    await authRelease;
+    await route.fulfill({ response });
+    finishedAuth();
+  });
+  await page.getByLabel("Username").fill(credentials.username);
+  await page.getByLabel("Password").fill(credentials.password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await authObserved;
+  await page.getByLabel("Username").fill(credentials.other_username);
+  await page.getByLabel("Password").fill(credentials.other_password);
+  await page.getByRole("button", { name: "Sign in", exact: true }).click();
+  await page
+    .locator(".user")
+    .getByText(credentials.other_username, { exact: true })
+    .waitFor();
+  releaseAuth();
+  await authFinished;
+  await page.waitForTimeout(250);
+  assert.equal(
+    await page
+      .locator(".user")
+      .getByText(credentials.username, { exact: true })
+      .count(),
+    0,
+    "An obsolete whoami response replaced the freshly authenticated account",
+  );
+  await page.unroute("**/api/auth/me");
+  await page.getByRole("button", { name: "Sign out", exact: true }).click();
+  await page.getByLabel("Username").waitFor();
+  assert.deepEqual(errors, [], "Unexpected JavaScript errors");
   console.log(
-    "PASS browser: login, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, severity filter, stale-response race, create/scan/error/edit/disable/archive/history, mobile, logout, account isolation during delayed refresh",
+    "PASS browser: login, channel badges, new SMTP delivery, detail, configured TLS band, immutable snapshot, severity filter, stale-response races (filters/whoami), create/scan/error/edit/disable/archive/history, mobile, logout, account isolation during delayed refresh",
   );
 } finally {
   await browser.close();
