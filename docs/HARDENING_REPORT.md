@@ -105,6 +105,22 @@ remain unchanged: Mailpit `lab` + `default`, only `127.0.0.1:8025`, SMTP 1025
 unpublished, lab HTTP/TLS only on internal `lab`. Linux CI records actual versions
 and verifies effective config, host reachability and SMTP; it is not a Windows run.
 
+## Verified candidate checkpoint
+
+Candidate source `3e2d940c26ac59d6646bd7b7a6e0038ae0a0eb0d` passed all three jobs in
+[fresh CI run 37496852792](https://github.com/Sushinull/SurfaceWatch/actions/runs/37496852792).
+Native PostgreSQL 17: **174 passed**, no skips, 59.27 seconds. Alembic upgrade/check
+and disposable downgrade/re-upgrade/check passed without schema drift. Frontend
+install/build/format/audit passed. Docker no-cache build/config/startup, all original
+and expanded acceptance scenarios, real Mailpit, scheduler, SIGKILL/SIGTERM/PENDING,
+DB restart, API outage and browser passed. Actual Linux Engine **28.0.4**, Compose
+**2.38.2**, CI Chromium **151.0.7922.34**; local Chromium **143** and Nmap **7.94SVN**.
+
+This candidate proof is followed by a fresh run on the final release commit.
+[The v1.0.1 Release](https://github.com/Sushinull/SurfaceWatch/releases/tag/v1.0.1)
+records that exact final SHA and CI URL after the gate succeeds. Do not substitute
+the candidate run for final-SHA verification.
+
 ## Security / hygiene
 
 All nine remote historical commits and 95 unique blobs (94 text, one PNG) were

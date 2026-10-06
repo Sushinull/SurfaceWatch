@@ -34,6 +34,9 @@ pointer, not merely the most recent scan. FAILED/PARTIAL never advance it. When 
 closure is proposed, a candidate row counts consecutive complete observations.
 Until the threshold is met, the whole trusted baseline stays in place. This favors
 low false positives at the cost of temporary lag in trusted service display.
+Rapid overlapping reversals can also be omitted from events while the whole
+baseline is held. The [hardening report](HARDENING_REPORT.md) records a reproduced
+two-port example. Endpoint-level trust is a V2 model change, not part of this patch.
 
 An explicit `closed` observation is necessary for REMOVED_PORT. An absent IP,
 smaller profile, timeout, filtered response or missing XML element is insufficient.

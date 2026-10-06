@@ -88,6 +88,10 @@ Telegram/Discord provider delivery was not attempted without operator credential
 
 ## Security review
 
+The later hardening audit found validation/Uvicorn logging gaps in these original
+claims and fixed them in v1.0.1. Consult H05–H07 in HARDENING_REPORT.md for current
+coverage; safe application logging alone did not protect Uvicorn's own handler.
+
 Argon2 account hashes; expiring opaque HttpOnly/SameSite sessions stored as HMAC
 hashes; login throttling; exact-origin/header CSRF checks; ownership on data routes;
 parameterized ORM access; bounded validated inputs; React text escaping and Nginx
