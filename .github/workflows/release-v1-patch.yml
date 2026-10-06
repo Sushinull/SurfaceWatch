@@ -1,0 +1,70 @@
+name: SurfaceWatch V1 patch release
+on:
+  workflow_run:
+    workflows: [SurfaceWatch checks]
+    types: [completed]
+permissions:
+  contents: read
+concurrency:
+  group: surfacewatch-v1-patch-release
+  cancel-in-progress: false
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_branch == 'main' &&
+      github.event.workflow_run.head_repository.full_name == github.repository &&
+      github.event.workflow_run.head_commit.message == 'release: SurfaceWatch v1.0.1'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      actions: read
+    env:
+      GH_TOKEN: ${{ github.token }}
+      SOURCE_SHA: ${{ github.event.workflow_run.head_sha }}
+      CHECK_RUN_ID: ${{ github.event.workflow_run.id }}
+      CHECK_RUN_URL: ${{ github.event.workflow_run.html_url }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+      - name: Verify exact main SHA, mandatory jobs and immutable old release
+        run: |
+          git fetch origin main
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          test -z "$(git status --porcelain)"
+          test "$(git rev-parse refs/tags/v1.0.0)" = '94f5d697ea379d83644b10350bd423d064835e4d'
+          test "$(git rev-parse 'refs/tags/v1.0.0^{commit}')" = '4577703c25e73b17c14a201d71dd99f335f337d3'
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$CHECK_RUN_ID/jobs" > /tmp/check-jobs.json
+          python - <<'PY'
+          import json
+          jobs = {j['name']: j['conclusion'] for j in json.load(open('/tmp/check-jobs.json'))['jobs']}
+          assert {name: jobs.get(name) for name in ('backend', 'frontend', 'docker')} == {
+              'backend': 'success', 'frontend': 'success', 'docker': 'success'
+          }, jobs
+          PY
+          test -z "$(git ls-remote --tags origin refs/tags/v1.0.1)"
+      - name: Create annotated patch tag on verified source
+        run: |
+          git fetch origin main
+          test "$(git rev-parse FETCH_HEAD)" = "$SOURCE_SHA"
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git tag -a v1.0.1 "$SOURCE_SHA" -m "SurfaceWatch v1.0.1; verified checks: $CHECK_RUN_URL"
+          git push origin refs/tags/v1.0.1
+      - name: Publish patch and verify old tag again
+        run: |
+          python - <<'PY'
+          import os
+          from pathlib import Path
+          body = Path('docs/RELEASE_NOTES.md').read_text().split('## Historical v1.0.0')[0]
+          body += '\nVerified source: `' + os.environ['SOURCE_SHA'] + '`\n'
+          body += '\nAll mandatory checks: ' + os.environ['CHECK_RUN_URL'] + '\n'
+          Path('/tmp/patch-release-notes.md').write_text(body)
+          PY
+          gh release create v1.0.1 --verify-tag --title 'SurfaceWatch v1.0.1' --notes-file /tmp/patch-release-notes.md
+          test "$(git ls-remote --tags origin refs/tags/v1.0.0 | cut -f1)" = '94f5d697ea379d83644b10350bd423d064835e4d'
+          test "$(git rev-parse 'refs/tags/v1.0.0^{commit}')" = '4577703c25e73b17c14a201d71dd99f335f337d3'

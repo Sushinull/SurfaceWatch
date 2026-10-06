@@ -236,13 +236,15 @@ it against your installation. See [verification report](docs/PROJECT_REPORT.md) 
 actually executed and any environment limits; a workflow's presence is not proof
 that its run has passed.
 
-## V1 freeze
+## V1 releases
 
 `v1.0.0` is an annotated tag for the verified main commit. The release workflow
 runs only after a push with the exact message `release: freeze SurfaceWatch v1.0.0`
 passes all mandatory checks. It verifies the tested SHA is still main's HEAD
 and refuses to overwrite an existing tag. The GitHub Release records the exact
-source SHA and CI run. For a stable checkout after release, use `git checkout v1.0.0`.
+source SHA and CI run. The tag remains immutable historical evidence.
+The v1.0.1 hardening patch uses a separate exact-SHA gate; after publication,
+use `git checkout v1.0.1`. See the [hardening report](docs/HARDENING_REPORT.md).
 This freeze covers authorized local portfolio/small-lab use. See
 [release notes](docs/RELEASE_NOTES.md) for scope and limitations.
 
@@ -253,6 +255,7 @@ This freeze covers authorized local portfolio/small-lab use. See
 - [Security boundary and remaining limitations](docs/SECURITY.md)
 - [Troubleshooting](docs/TROUBLESHOOTING.md)
 - [Final project report and V2 roadmap](docs/PROJECT_REPORT.md)
+- [V1.0.1 hardening and regression coverage](docs/HARDENING_REPORT.md)
 
 Current limitations include one serial worker, direct TLS only (no STARTTLS), no
 certificate-chain trust assessment, no vulnerability detection, no multi-tenant

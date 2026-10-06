@@ -15,6 +15,8 @@
 | Second worker exits | Expected: one V1 worker owns an advisory lock. Use the existing worker instead of scaling replicas. |
 | Slow scans | Timeout is per IP; maximum eight IPs by default. Use narrower profiles, explicit IPs or fewer targets. Service detection may need time even on local ports. |
 | SCAN_FAILED after restart | Interrupted RUNNING jobs are recorded as failed. The prior baseline remains. Queue a new scan. |
+| RUNNING after a transient completion DB error | v1.0.1 recovers the orphaned job at the next worker tick. Losing the advisory-lock connection exits the worker; Docker restarts it. Restore DB connectivity and inspect logs; do not reset volumes. |
+| TLS card disagrees with custom thresholds | Rebuild both backend/frontend at v1.0.1; certificate bands now use the server's thresholds. |
 | Notification stays PENDING / FAILED | Inspect attempts and logs; configure SMTP credentials/STARTTLS or Telegram/Discord settings, recreate backend and worker, use Send test. CONFIGURED means settings are present, not verified connectivity. |
 | Mailpit 8025 configured but unreachable / `docker port` empty | Pull the V1 fix and recreate Mailpit with both Compose files. It must join `lab` and `default`; internal-only attachment reproduced this symptom on the reported Engine 29.8.1 / Compose 5.5.1 setup. Verify `port mailpit 8025` and host HTTP access. Do not publish SMTP or lab ports. |
 | SMTP delivered but badge says NOT CONFIGURED | Backend and worker must load the same channel settings. The demo now shares one SMTP anchor. Recreate both with both Compose files; do not edit UI state or expose credentials. |

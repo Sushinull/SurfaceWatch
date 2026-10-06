@@ -1,5 +1,9 @@
 # Controlled local demo
 
+The v1.0.1 patch preserves these networking/default-threshold steps. Disposable CI
+also checks DB restart, durable PENDING work, API outage independence and unchanged
+TLS warning deduplication after worker interruption. See [hardening report](HARDENING_REPORT.md).
+
 No public hosts are involved. The lab is on an internal Docker network and publishes
 no service ports to the host. Nmap uses unprivileged TCP connect scanning.
 

@@ -221,10 +221,68 @@ def main():
     )
     assert sum(s["state"] in {"PENDING", "RUNNING"} for s in scheduled) <= 1
     print("PASS persisted due timestamp -> scheduled SUCCESS without overlap", flush=True)
+    assert sum(e["type"] == "TLS_CRITICAL" for e in events()) == 1
+    print(
+        "PASS unchanged TLS warning remains deduplicated across interrupted scan recovery",
+        flush=True,
+    )
+
+    # Idle SIGTERM, then a durable PENDING job while the worker is stopped.
+    compose("stop", "--timeout", "30", "worker")
+    pending = api(f"/targets/{target_id}/scans", "POST")
+    assert api(f"/scans/{pending['id']}")["state"] == "PENDING"
+    compose("up", "-d", "worker")
+    wait_for(
+        lambda: api(f"/scans/{pending['id']}"),
+        lambda s: s["state"] == "SUCCESS",
+        "durable PENDING restart",
+    )
+    print("PASS idle SIGTERM + durable PENDING job completes after worker restart", flush=True)
+
+    # A database interruption must retain data; never reset or remove the volume.
+    trusted = detail()["baseline_scan_id"]
+    compose("stop", "--timeout", "10", "db")
+    time.sleep(5)
+    compose("up", "-d", "--wait", "db", "backend", "worker")
+    assert detail()["baseline_scan_id"] == trusted
+    print(
+        "PASS real database stop/start preserves trusted baseline and restores API/worker",
+        flush=True,
+    )
+
+    # The worker consumes PostgreSQL jobs directly, even while the API is stopped.
+    independent = api(f"/targets/{target_id}/scans", "POST")
+    compose("stop", "--timeout", "10", "backend")
+
+    def worker_job_state():
+        return compose(
+            "exec",
+            "-T",
+            "worker",
+            "python",
+            "-c",
+            "from app.db.session import SessionLocal; from app.db.models import Scan; "
+            f"db=SessionLocal(); print(db.get(Scan,{independent['id']}).state); db.close()",
+        ).strip()
+
+    wait_for(worker_job_state, lambda state: state == "SUCCESS", "worker independent of API")
+    compose("up", "-d", "--wait", "backend")
+    assert api(f"/scans/{independent['id']}")["state"] == "SUCCESS"
+    assert (
+        sum(s["state"] in {"PENDING", "RUNNING"} for s in api(f"/scans?target_id={target_id}")) == 0
+    )
+    assert sum(e["type"] == "TLS_CRITICAL" for e in events()) == 1
+    print(
+        "PASS worker finishes while API stopped; restart retains immutable history without duplicates",
+        flush=True,
+    )
     if args.credentials_file:
         args.credentials_file.write_text(json.dumps({"username": username, "password": password}))
         args.credentials_file.chmod(0o600)
-    print("PASS Docker demo acceptance: 8 scenarios", flush=True)
+    print(
+        "PASS Docker demo acceptance: original scenarios plus dedupe, SIGTERM/PENDING, database restart, API outage",
+        flush=True,
+    )
 
 
 if __name__ == "__main__":

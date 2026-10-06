@@ -1,5 +1,9 @@
 # SurfaceWatch V1 final audit and freeze report
 
+This preserves historical v1.0.0 verification. Current main also contains the
+subsequent [v1.0.1 hardening report](HARDENING_REPORT.md); use it and the patch
+release's exact-SHA CI evidence for current source. The old tag remains immutable.
+
 Date: 2026-10-06. Repository: [Sushinull/SurfaceWatch](https://github.com/Sushinull/SurfaceWatch), private, branch `main`.
 Scope: authorized local portfolio and small-lab monitoring. This is not a claim of
 production readiness or public multi-tenant deployment.

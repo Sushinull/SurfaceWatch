@@ -1,4 +1,33 @@
-SurfaceWatch V1 is frozen for authorized local portfolio and small-lab monitoring.
+# SurfaceWatch v1.0.1
+
+Backward-compatible hardening of authorized local V1 monitoring. Twelve confirmed
+bugs fixed; no new providers, architecture, schema or UI redesign.
+
+- Reject late/stale scan completion; recover orphaned RUNNING work after transient
+  completion errors without promoting uncertain evidence.
+- Keep TLS/change warning deduplication through FAILED/PARTIAL; attention status
+  considers older unacknowledged significant events.
+- Omit rejected secrets from API/settings validation and Uvicorn exception logging.
+- Reject blank profile names; serialize notification rule count/insert on PostgreSQL.
+- Reject obsolete UI refresh responses, honor configured TLS bands and restore
+  mobile Sign out access.
+- Add deterministic adversarial/provider tests, real PG races and fresh Docker/SMTP,
+  scheduler, recovery, DB/API outage and browser regression gates.
+
+See [hardening report](https://github.com/Sushinull/SurfaceWatch/blob/main/docs/HARDENING_REPORT.md)
+for reproduction, severity, coverage and honest platform limits. Windows Engine
+29.8.1 / Compose 5.5.1 was not independently rerun; Linux verifies the unchanged
+loopback/internal networking. Whole-baseline holding can omit rapid overlapping
+reversals; delivery remains at least once. This is not public production readiness.
+
+Upgrade: preserve `.env` and PostgreSQL volume, checkout v1.0.1, then rebuild/recreate
+using your normal Compose files. `down` preserves history; `down -v` deletes it.
+The annotated patch tag and Release require green CI on the exact final main SHA.
+The v1.0.0 annotated tag remains immutable.
+
+## Historical v1.0.0
+
+SurfaceWatch V1 was frozen for authorized local portfolio and small-lab monitoring.
 
 - Mailpit uses the internal lab and normal default bridge; its inspection UI stays
   bound to `127.0.0.1:8025`. Lab services and SMTP port 1025 are not host-published.

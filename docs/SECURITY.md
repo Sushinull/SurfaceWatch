@@ -27,6 +27,8 @@ vulnerability probing workflow or large-scale discovery.
 - Random generated secrets in an ignored environment file; SMTP/Telegram/Discord
   credentials are operator settings, never returned to the browser or stored in rules.
 - Sanitized notification errors and request logs omit exception texts/credentials.
+- Uvicorn errors use safe JSON too. Request validation omits rejected inputs/context;
+  settings validation text hides secrets on startup failure.
 - Non-root backend/frontend/demo containers; no privileged scanning, no capabilities
   for application containers, no-new-privileges, read-only filesystem and tmpfs.
 - Loopback-only published UI/database/mail inspection ports; internal demo network.
@@ -63,6 +65,8 @@ database administrators can modify them. There is no signed evidence ledger.
 Notification delivery is at least once; a crash after external acceptance but before
 commit can duplicate a message. A TLS handshake failure conservatively makes the
 whole scan PARTIAL, temporarily delaying service comparisons on that target.
+Overlapping rapid reversals during whole-baseline holding may be omitted; see the
+[concrete hardening limitation](HARDENING_REPORT.md#reliability-and-known-v1-limitations).
 
 The standard SQL fixture suite uses SQLite only for test isolation. PostgreSQL is
 required in real deployments. One serial worker can be delayed by slow multi-IP

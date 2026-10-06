@@ -31,6 +31,9 @@ jobs:
       - run: python -m ruff format --check backend/app backend/tests backend/migrations demo scripts
       - run: python -m alembic upgrade head && python -m alembic check
         working-directory: backend
+      - name: Exercise downgrade and clean re-upgrade on disposable CI database
+        run: python -m alembic downgrade base && python -m alembic upgrade head && python -m alembic check
+        working-directory: backend
       - run: python -m pytest -q
         working-directory: backend
       - run: pip install pip-audit==2.10.0 && python -m pip_audit -r backend/requirements.txt --progress-spinner off
@@ -58,8 +61,10 @@ jobs:
         with: {node-version: '22', cache: npm, cache-dependency-path: frontend/package-lock.json}
       - run: python scripts/setup.py
       - run: docker version --format '{{.Server.Version}}' && docker compose version
+      - run: docker compose config --quiet
       - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml config --quiet
-      - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml up --build -d --wait
+      - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml build --no-cache --pull
+      - run: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d --wait
       - run: curl --fail http://localhost:8080/api/health
       - run: python scripts/demo_acceptance.py --disposable --credentials-file "$SW_ACCEPTANCE_CREDENTIALS"
       - run: npm ci && npx playwright install --with-deps chromium && node tests/demo-smoke.mjs

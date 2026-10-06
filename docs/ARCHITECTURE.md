@@ -54,7 +54,8 @@ observations clear closure candidates. Profiles and historical evidence remain i
 The comparison engine returns normalized event proposals. Persistence stores a
 stable event fingerprint based on type and structured evidence. Active fingerprints
 suppress the same ongoing condition, including a repeated scan failure or unchanged
-expiry warning. A later absence of the condition permits a new occurrence. Warnings
+expiry warning. FAILED/PARTIAL retain latches because they cannot prove resolution;
+a later complete SUCCESS absence permits a new occurrence. Warnings
 use certificate fingerprint and threshold band rather than daily remaining-day text.
 Version/product fields are compared only when both observations populated them and
 the scanner's confidence is sufficient; metadata loss/enrichment alone is uncertain.
@@ -98,11 +99,14 @@ created after `scans` on PostgreSQL. UTC timezone-aware timestamps are used thro
 ## Worker lifecycle
 
 The V1 worker acquires a dedicated session advisory lock before recovery, scheduling
-or delivery. On startup it marks interrupted RUNNING jobs FAILED. It claims queued
+or delivery. At startup and serial tick boundaries it marks orphaned RUNNING jobs
+FAILED, including a prior failed completion transaction. It claims queued
 jobs using `FOR UPDATE SKIP LOCKED`; enqueue uses a savepoint and the partial unique
 index to handle manual/scheduled overlap without discarding other transaction work.
 Scan history, events, baseline promotion and notification outbox entries commit
 together. Delivery runs separately; failure never changes the completed scan.
+Completion locks target then scan, refreshes persisted identities and rejects
+late results for completed jobs, preserving immutability across recovery.
 
 SMTP delivery can be fully local. Telegram/Discord destinations come only from
 operator-controlled environment settings. No arbitrary webhook URL is accepted via
