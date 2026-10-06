@@ -1,0 +1,22 @@
+services:
+  lab:
+    build: ./demo
+    environment:
+      EXTRA_SERVICE: ${EXTRA_SERVICE:-false}
+      CERT_DAYS: ${CERT_DAYS:-90}
+    networks:
+      lab: {ipv4_address: 172.30.0.10}
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+  mailpit:
+    image: axllent/mailpit:v1.27
+    ports: [127.0.0.1:8025:8025]
+    networks: [lab]
+  worker:
+    environment:
+      SMTP_HOST: mailpit
+      SMTP_PORT: 1025
+      SMTP_STARTTLS: "false"
+      SMTP_ALLOW_PLAINTEXT: "true"

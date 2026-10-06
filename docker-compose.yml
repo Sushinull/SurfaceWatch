@@ -1,0 +1,66 @@
+name: surfacewatch
+x-backend: &backend
+  build: ./backend
+  env_file: .env
+  environment:
+    DATABASE_URL: postgresql+psycopg://${POSTGRES_USER:-surfacewatch}:${POSTGRES_PASSWORD:?Run python scripts/setup.py first}@db:5432/${POSTGRES_DB:-surfacewatch}
+  init: true
+  restart: unless-stopped
+  cap_drop: [ALL]
+  security_opt: [no-new-privileges:true]
+  read_only: true
+  tmpfs: [/tmp]
+  networks: [default, lab]
+services:
+  db:
+    image: postgres:17-alpine
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-surfacewatch}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Run python scripts/setup.py first}
+      POSTGRES_DB: ${POSTGRES_DB:-surfacewatch}
+    volumes: [postgres_data:/var/lib/postgresql/data]
+    ports: [127.0.0.1:5432:5432]
+    healthcheck:
+      test: [CMD-SHELL, "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+    restart: unless-stopped
+  migrate:
+    <<: *backend
+    restart: "no"
+    command: [sh, -c, "python -m alembic upgrade head && python -m app.cli seed"]
+    depends_on:
+      db: {condition: service_healthy}
+  backend:
+    <<: *backend
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+  worker:
+    <<: *backend
+    command: [python, -m, app.worker]
+    stop_grace_period: 30s
+    depends_on:
+      migrate: {condition: service_completed_successfully}
+  frontend:
+    build: ./frontend
+    ports: [127.0.0.1:8080:8080]
+    depends_on:
+      backend: {condition: service_healthy}
+    restart: unless-stopped
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    read_only: true
+    tmpfs: [/tmp]
+volumes:
+  postgres_data:
+networks:
+  lab:
+    internal: true
+    ipam:
+      config: [{subnet: 172.30.0.0/24}]
