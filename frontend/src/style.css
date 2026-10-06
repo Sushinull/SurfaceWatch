@@ -799,8 +799,18 @@ footer {
     font-size: 17px;
   }
   .nav-label,
-  .sidebar-bottom {
+  .sidebar-bottom > .signal,
+  .sidebar-bottom > p,
+  .sidebar-bottom > a {
     display: none;
+  }
+  .sidebar-bottom {
+    margin-top: 12px;
+    padding-top: 0;
+  }
+  .user {
+    margin-top: 0;
+    padding-top: 12px;
   }
   nav {
     flex-direction: row;

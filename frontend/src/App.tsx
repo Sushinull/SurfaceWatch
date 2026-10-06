@@ -1,6 +1,7 @@
 import {
   useCallback,
   useEffect,
+  useRef,
   useState,
   type FormEvent,
   type ReactNode,
@@ -478,17 +479,7 @@ function TLSCards({ certs }: { certs: Certificate[] }) {
             <strong>
               {c.address}:{c.port}
             </strong>
-            <Badge
-              value={
-                c.days_remaining <= 0
-                  ? "EXPIRED"
-                  : c.days_remaining <= 7
-                    ? "CRITICAL"
-                    : c.days_remaining <= 30
-                      ? "WARNING"
-                      : "VALID"
-              }
-            />
+            <Badge value={c.status} />
           </div>
           <p>
             {c.days_remaining} days remaining · {time(c.not_after)}
@@ -550,6 +541,9 @@ export default function App() {
   const [eventOffset, setEventOffset] = useState(0);
   const [scanOffset, setScanOffset] = useState(0);
   const [showArchived, setShowArchived] = useState(false);
+  const refreshGeneration = useRef(0);
+  const activeRefresh = useRef<(() => Promise<void>) | null>(null);
+  const refreshInFlight = useRef<(() => Promise<void>) | null>(null);
   const checkUser = useCallback(async () => {
     try {
       setUser(await api("/auth/me"));
@@ -563,8 +557,15 @@ export default function App() {
   useEffect(() => {
     void checkUser();
   }, [checkUser]);
-  const refresh = useCallback(async () => {
-    if (!user) return;
+  const refresh: () => Promise<void> = useCallback(async () => {
+    if (
+      !user ||
+      activeRefresh.current !== refresh ||
+      refreshInFlight.current === refresh
+    )
+      return;
+    refreshInFlight.current = refresh;
+    const generation = ++refreshGeneration.current;
     try {
       const q = new URLSearchParams({
         limit: "50",
@@ -585,6 +586,7 @@ export default function App() {
         api<Notification[]>("/notifications"),
         api<Record<string, boolean>>("/notifications/config"),
       ]);
+      if (generation !== refreshGeneration.current) return;
       setDashboard(d);
       setTargets(t);
       setProfiles(p);
@@ -599,19 +601,33 @@ export default function App() {
           api<Scan[]>("/scans?target_id=" + selected),
           api<Event[]>("/events?target_id=" + selected),
         ]);
+        if (generation !== refreshGeneration.current) return;
         setDetail(td);
         setDetailScans(ts);
         setDetailEvents(te);
       }
     } catch (e) {
+      if (generation !== refreshGeneration.current) return;
       if (e instanceof ApiError && e.status === 401) setUser(null);
       else setError(message(e));
+    } finally {
+      if (
+        refreshInFlight.current === refresh &&
+        generation === refreshGeneration.current
+      )
+        refreshInFlight.current = null;
     }
   }, [user, filters, eventOffset, scanOffset, showArchived, selected]);
   useEffect(() => {
+    activeRefresh.current = refresh;
     void refresh();
     const timer = setInterval(() => void refresh(), 5000);
-    return () => clearInterval(timer);
+    return () => {
+      clearInterval(timer);
+      activeRefresh.current = null;
+      refreshInFlight.current = null;
+      ++refreshGeneration.current;
+    };
   }, [refresh]);
   async function action(fn: () => Promise<unknown>) {
     setBusy(true);

@@ -51,6 +51,7 @@ export interface Certificate {
   sans: string[];
   hostname_matches: boolean;
   days_remaining: number;
+  status: "EXPIRED" | "CRITICAL" | "WARNING" | "VALID";
 }
 export interface Snapshot {
   state: string;
