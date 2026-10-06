@@ -45,6 +45,9 @@ def rules(db: Session = Depends(get_db), user: User = Depends(current_user)):
 @router.post("/rules", status_code=201, response_model=RuleOut)
 def create_rule(data: RuleInput, db: Session = Depends(get_db), user: User = Depends(current_user)):
     validate_rule(data)
+    # Serialize this owner's count + insert so simultaneous requests cannot exceed
+    # the advertised cap. PostgreSQL is the deployment database.
+    db.scalar(select(User).where(User.id == user.id).with_for_update())
     count = len(db.scalars(select(AlertRule).where(AlertRule.owner_id == user.id)).all())
     if count >= 10:
         raise HTTPException(409, "Maximum 10 notification rules")

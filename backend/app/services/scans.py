@@ -39,10 +39,23 @@ def enqueue(db, target: Target, ports: list[int], source="manual") -> Scan | Non
 
 
 def finish_scan(db, scan_id: int, snapshot: Snapshot, settings: Settings):
-    scan = db.get(Scan, scan_id)
+    target_id = db.scalar(select(Scan.target_id).where(Scan.id == scan_id))
+    # Match API/scheduler lock order (target before scan). Refresh cached identities:
+    # a late result must not overwrite a completion committed by recovery elsewhere.
+    target = db.scalar(
+        select(Target)
+        .where(Target.id == target_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
+    scan = db.scalar(
+        select(Scan)
+        .where(Scan.id == scan_id)
+        .with_for_update()
+        .execution_options(populate_existing=True)
+    )
     if scan is None or scan.state != "RUNNING":
         raise ValueError("Only a running scan can be completed; snapshots are immutable")
-    target = db.get(Target, scan.target_id)
     previous_scan = db.get(Scan, target.baseline_scan_id) if target.baseline_scan_id else None
     previous = Snapshot.model_validate(previous_scan.snapshot) if previous_scan else None
     scan.state = snapshot.state.value
@@ -122,9 +135,15 @@ def finish_scan(db, scan_id: int, snapshot: Snapshot, settings: Settings):
         db.add(row)
         emit.append(row)
     # Candidates do not suppress the first confirmed event.
-    target.active_fingerprints = [e.fingerprint for e in emit] + [
-        k for k in observed_keys if k in target.active_fingerprints
-    ]
+    if snapshot.state in {ScanState.FAILED, ScanState.PARTIAL}:
+        # Uncertainty cannot prove that an existing warning/change was resolved.
+        target.active_fingerprints = list(
+            dict.fromkeys([*target.active_fingerprints, *observed_keys])
+        )
+    else:
+        target.active_fingerprints = [e.fingerprint for e in emit] + [
+            k for k in observed_keys if k in target.active_fingerprints
+        ]
     if snapshot.state == ScanState.SUCCESS and not held:
         target.baseline_scan_id = scan.id
         db.execute(delete(ChangeCandidate).where(ChangeCandidate.target_id == target.id))

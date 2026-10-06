@@ -50,7 +50,16 @@ def target_view(db, target):
     status = "Awaiting baseline"
     if baseline:
         status = "Healthy"
-    if latest and not latest.acknowledged and latest.severity in {"MEDIUM", "HIGH", "CRITICAL"}:
+    attention = db.scalar(
+        select(ChangeEvent.id)
+        .where(
+            ChangeEvent.target_id == target.id,
+            ChangeEvent.acknowledged.is_(False),
+            ChangeEvent.severity.in_(["MEDIUM", "HIGH", "CRITICAL"]),
+        )
+        .limit(1)
+    )
+    if attention is not None:
         status = "Changes detected"
     if baseline and any(
         (c.not_after - datetime.now(UTC)).total_seconds() <= get_settings().tls_warning_days * 86400
@@ -247,20 +256,25 @@ def detail(target_id: int, db: Session = Depends(get_db), user: User = Depends(c
         "services": [s.model_dump() for s in snapshot.services if s.state == "open"]
         if snapshot
         else [],
-        "certificates": [
-            {
-                **c.model_dump(mode="json"),
-                "days_remaining": math.ceil(
-                    (c.not_after - datetime.now(UTC)).total_seconds() / 86400
-                ),
-            }
-            for c in snapshot.certificates
-        ]
-        if snapshot
-        else [],
+        "certificates": [certificate_view(c) for c in snapshot.certificates] if snapshot else [],
         "addresses": snapshot.addresses if snapshot else [],
         "dns": snapshot.dns if snapshot else {},
     }
+
+
+def certificate_view(c):
+    days = math.ceil((c.not_after - datetime.now(UTC)).total_seconds() / 86400)
+    settings = get_settings()
+    status = (
+        "EXPIRED"
+        if days <= 0
+        else "CRITICAL"
+        if days <= settings.tls_critical_days
+        else "WARNING"
+        if days <= settings.tls_warning_days
+        else "VALID"
+    )
+    return {**c.model_dump(mode="json"), "days_remaining": days, "status": status}
 
 
 @router.post("/targets/{target_id}/scans", status_code=202, response_model=ScanOut)

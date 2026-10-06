@@ -41,6 +41,13 @@ class ProfileInput(Input):
     ports: list[int] = Field(min_length=1, max_length=1024)
     description: str = Field(default="", max_length=300)
 
+    @field_validator("name")
+    @classmethod
+    def name_not_empty(cls, value):
+        if not value.strip():
+            raise ValueError("Name cannot be blank")
+        return value.strip()
+
     @field_validator("ports")
     @classmethod
     def ports_valid(cls, value):

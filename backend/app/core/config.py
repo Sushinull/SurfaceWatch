@@ -5,7 +5,9 @@ from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=("../.env", ".env"), extra="ignore")
+    model_config = SettingsConfigDict(
+        env_file=("../.env", ".env"), extra="ignore", hide_input_in_errors=True
+    )
     database_url: str = "postgresql+psycopg://surfacewatch:surfacewatch@localhost/surfacewatch"
     secret_key: str = Field(min_length=32)
     allowed_target_cidrs: str = ""

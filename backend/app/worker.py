@@ -33,9 +33,26 @@ def schedule_due(db):
     db.commit()
 
 
+def recover_interrupted_scans(db, settings):
+    # The advisory lock permits only one synchronous worker. At a tick boundary,
+    # RUNNING jobs belong to a previous interrupted/failed completion, never live work.
+    for scan in db.scalars(select(Scan).where(Scan.state == "RUNNING")).all():
+        finish_scan(
+            db,
+            scan.id,
+            Snapshot(
+                state=ScanState.FAILED,
+                ports=scan.ports,
+                errors=["Worker interrupted or completion failed; previous baseline retained"],
+            ),
+            settings,
+        )
+
+
 def tick(session_factory=SessionLocal, settings=None, scanner=execute_scan):
     settings = settings or get_settings()
     with session_factory() as db:
+        recover_interrupted_scans(db, settings)
         schedule_due(db)
         scan = db.scalar(
             select(Scan)
@@ -78,17 +95,7 @@ def main():
                 raise RuntimeError("Another SurfaceWatch worker is already active")
             lock.commit()
         with SessionLocal() as db:
-            for scan in db.scalars(select(Scan).where(Scan.state == "RUNNING")).all():
-                finish_scan(
-                    db,
-                    scan.id,
-                    Snapshot(
-                        state=ScanState.FAILED,
-                        ports=scan.ports,
-                        errors=["Worker interrupted; previous baseline retained"],
-                    ),
-                    get_settings(),
-                )
+            recover_interrupted_scans(db, get_settings())
         log.info("worker_ready")
         while not stop.is_set():
             if engine.dialect.name == "postgresql":

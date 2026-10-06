@@ -2,6 +2,7 @@ import logging
 from urllib.parse import urlparse
 
 from fastapi import FastAPI, Request
+from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
 from sqlalchemy import text
 from starlette.middleware.trustedhost import TrustedHostMiddleware
@@ -14,7 +15,7 @@ from app.db.session import SessionLocal
 configure_logging()
 app = FastAPI(
     title="SurfaceWatch",
-    version="1.0.0",
+    version="1.0.1",
     description="Authorized service change monitoring. Failed/partial scans never imply removal.",
     docs_url="/api/docs",
     openapi_url="/api/openapi.json",
@@ -61,6 +62,16 @@ async def error_handler(request: Request, exc: Exception):
         type(exc).__name__,
     )
     return JSONResponse({"detail": "Internal error; check service logs"}, status_code=500)
+
+
+@app.exception_handler(RequestValidationError)
+async def validation_error_handler(request: Request, exc: RequestValidationError):
+    # Keep field diagnostics without reflecting passwords, arbitrary extra fields,
+    # rejected request bodies or exception context into an API response.
+    return JSONResponse(
+        {"detail": [{key: error[key] for key in ("type", "loc", "msg")} for error in exc.errors()]},
+        status_code=422,
+    )
 
 
 @app.get("/api/health", tags=["Health"])
